@@ -1,4 +1,7 @@
+// @author mirailisc
+// @ts-ignore
 import { IGetResponse } from "../generated/interface.js";
+
 import Nomad from "./client.js";
 
 const client = new Nomad({
