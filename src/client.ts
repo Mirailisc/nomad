@@ -1,14 +1,12 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
 import { scrapeObjectProperty } from "./scrape.js";
-import { z } from "zod";
 import fs from "fs";
 
 interface HttpOptions extends AxiosRequestConfig {
   baseUrl: string;
 }
 
-const zResObjRecord = z.record(z.string(), z.unknown());
-type ZResRecord = z.infer<typeof zResObjRecord>;
+type ResponseType = Record<string, unknown>;
 
 function generateInterface(obj: any, interfaceName: string): string {
   let result = `export interface ${interfaceName} {\n`;
@@ -31,7 +29,7 @@ function generateInterface(obj: any, interfaceName: string): string {
 }
 
 export default class Nomad {
-  private resRecord: ZResRecord = {};
+  private resRecord: ResponseType = {};
 
   constructor(private options: HttpOptions) {}
 
@@ -62,9 +60,7 @@ export default class Nomad {
       });
     }
 
-    const parsedSchema = await zResObjRecord.parseAsync(this.resRecord);
-
-    generateInterface(parsedSchema, `IGetResponse`);
+    generateInterface(this.resRecord, `IGetResponse`);
 
     return data as T;
   }
