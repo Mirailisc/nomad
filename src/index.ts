@@ -10,4 +10,5 @@ const client = new Nomad({
 
 const res = await client.get<IGetResponse[]>("/users");
 
-console.log(res[0].username);
+console.log(res.data);
+// res.data.map((el: IGetResponse) => console.log(el));

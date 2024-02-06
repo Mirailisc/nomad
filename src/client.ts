@@ -1,31 +1,14 @@
-import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from "axios";
 import { scrapeObjectProperty } from "./scrape.js";
-import fs from "fs";
+import { generateInterface } from "./interface.js";
 
 interface HttpOptions extends AxiosRequestConfig {
   baseUrl: string;
 }
 
 type ResponseType = Record<string, unknown>;
-
-function generateInterface(obj: any, interfaceName: string): string {
-  let result = `export interface ${interfaceName} {\n`;
-
-  for (const key in obj) {
-    if (obj.hasOwnProperty(key)) {
-      result += `    ${key}: ${obj[key]};\n`;
-    }
-  }
-
-  result += `}\n`;
-
-  fs.writeFile("generated/interface.ts", result, function (err: any) {
-    if (err) {
-      return console.log(err);
-    }
-  });
-
-  return result;
+interface ReturnResponseType<T> extends AxiosResponse<any, any> {
+  data: T;
 }
 
 export default class Nomad {
@@ -33,8 +16,24 @@ export default class Nomad {
 
   constructor(private options: HttpOptions) {}
 
-  getBaseUrl(): string | undefined {
+  public getBaseUrl(): string {
     return this.options.baseUrl;
+  }
+
+  public async get<T>(path?: string): Promise<ReturnResponseType<T>> {
+    const res = await this.instance().get(path ?? "");
+
+    try {
+      this.scrapeTypeFromObject(res.data);
+      generateInterface(this.resRecord, `IGetResponse`);
+    } catch (err) {
+      console.error(err);
+    }
+
+    return {
+      ...res,
+      data: res.data as T,
+    };
   }
 
   private instance(): AxiosInstance {
@@ -46,26 +45,23 @@ export default class Nomad {
     });
   }
 
-  async get<T>(path?: string): Promise<T> {
-    const { data } = await this.instance().get(path ?? "");
-    const scraped = this.getScrapedData(data);
+  private scrapeTypeFromObject(obj: any) {
+    const scraped = this.getScrapedData(obj);
 
-    if (scraped && data.length === 0) {
+    if (scraped && obj.length === 0) {
       scraped.forEach((name: any) => {
-        this.resRecord[name] = typeof data[name];
+        this.resRecord[name] = typeof obj[name];
       });
-    } else if (scraped && data.length !== 0) {
+    } else if (scraped && obj.length !== 0) {
       scraped.forEach((name: any) => {
-        this.resRecord[name] = typeof data[0][name];
+        this.resRecord[name] = typeof obj[0][name];
       });
     }
 
     generateInterface(this.resRecord, `IGetResponse`);
-
-    return data as T;
   }
 
-  getScrapedData(data: any) {
+  private getScrapedData(data: any) {
     return JSON.stringify(data).length !== 0
       ? scrapeObjectProperty(data[0])
       : scrapeObjectProperty(data);
