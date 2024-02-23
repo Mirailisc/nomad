@@ -1,15 +1,12 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from "axios";
-import { scrapeObjectProperty } from "./scrape.js";
 import { generateInterface } from "./interface.js";
+import { scrapeObjectProperty } from "./scrape.js";
 
 interface HttpOptions extends AxiosRequestConfig {
   baseUrl: string;
 }
 
 type ResponseType = Record<string, unknown>;
-interface ReturnResponseType<T> extends AxiosResponse<any, any> {
-  data: T;
-}
 
 export default class Nomad {
   private resRecord: ResponseType = {};
@@ -20,23 +17,7 @@ export default class Nomad {
     return this.options.baseUrl;
   }
 
-  public async get<T>(path?: string): Promise<ReturnResponseType<T>> {
-    const res = await this.instance().get(path ?? "");
-
-    try {
-      this.scrapeTypeFromObject(res.data);
-      generateInterface(this.resRecord, `IGetResponse`);
-    } catch (err) {
-      console.error(err);
-    }
-
-    return {
-      ...res,
-      data: res.data as T,
-    };
-  }
-
-  private instance(): AxiosInstance {
+  private create(): AxiosInstance {
     return axios.create({
       baseURL: this.options.baseUrl,
       headers: {
@@ -45,25 +26,40 @@ export default class Nomad {
     });
   }
 
-  private scrapeTypeFromObject(obj: any) {
-    const scraped = this.getScrapedData(obj);
-
-    if (scraped && obj.length === 0) {
-      scraped.forEach((name: any) => {
-        this.resRecord[name] = typeof obj[name];
-      });
-    } else if (scraped && obj.length !== 0) {
-      scraped.forEach((name: any) => {
-        this.resRecord[name] = typeof obj[0][name];
-      });
-    }
-
-    generateInterface(this.resRecord, `IGetResponse`);
+  private async getScrapedData(data: any): Promise<any> {
+    return JSON.stringify(data).length !== 0
+      ? scrapeObjectProperty(data)
+      : null;
   }
 
-  private getScrapedData(data: any) {
-    return JSON.stringify(data).length !== 0
-      ? scrapeObjectProperty(data[0])
-      : scrapeObjectProperty(data);
+  public async get<T>(
+    path?: string,
+    name?: string,
+    options?: AxiosRequestConfig
+  ): Promise<AxiosResponse<T>> {
+    const res = await this.create().get<T>(path ?? "", { ...options });
+
+    try {
+      await this.scrapeTypeFromObject(res.data, name);
+    } catch (err) {
+      console.error(err);
+    }
+
+    return res;
+  }
+
+  private async scrapeTypeFromObject(obj: any, interfaceName?: string) {
+    const scraped = await this.getScrapedData(obj);
+
+    if (scraped) {
+      this.generateInterfaceFromObject(scraped, interfaceName);
+    }
+  }
+
+  private generateInterfaceFromObject(obj: any, interfaceName?: string) {
+    generateInterface(
+      obj,
+      interfaceName ? `I${interfaceName}` : "IGetResponse"
+    );
   }
 }
